@@ -1,18 +1,56 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { formatRupiah } from '@/lib/utils';
 
-export default function LoanCalculator() {
-  const [clientName, setClientName] = useState<string>('');
-  const [otr, setOtr] = useState<string>('');
-  const [dpType, setDpType] = useState<'percentage' | 'nominal'>('percentage');
-  const [dpValue, setDpValue] = useState<string>('');
-  const [tenor, setTenor] = useState<string>('');
+/**
+ * Mendapatkan tanggal hari ini dalam format lokal sistem/host (YYYY-MM-DD).
+ * Digunakan sebagai nilai default dinamis untuk input tanggal.
+ *
+ * @returns {string} Tanggal berformat YYYY-MM-DD
+ */
+const getTodayDate = (): string => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
+/**
+ * Komponen Utama: LoanCalculator
+ * 
+ * Mengelola seluruh alur simulasi kredit mobil:
+ * 1. Form input data pembiayaan (OTR, DP, Tenor, Tanggal Mulai).
+ * 2. Perhitungan pokok utang, bunga bertingkat sesuai tenor, dan angsuran per bulan.
+ * 3. Pembuatan jadwal angsuran bulanan yang dinamis.
+ * 4. Pengecekan total angsuran jatuh tempo per tanggal tertentu.
+ * 5. Pengecekan dan kalkulasi denda keterlambatan pembayaran (0.1% per hari).
+ */
+export default function LoanCalculator() {
+  // ============================================================================
+  // 1. STATE FORM INPUT SIMULASI
+  // ============================================================================
+  /** Nama calon debitur / klien */
+  const [clientName, setClientName] = useState<string>('');
+  /** Harga Mobil On The Road (OTR) dalam format teks terformat (contoh: 240.000.000) */
+  const [otr, setOtr] = useState<string>('');
+  /** Jenis input Uang Muka (DP): 'percentage' (%) atau 'nominal' (Rp) */
+  const [dpType, setDpType] = useState<'percentage' | 'nominal'>('percentage');
+  /** Nilai DP (berupa angka persentase atau teks nominal Rupiah) */
+  const [dpValue, setDpValue] = useState<string>('');
+  /** Jangka waktu pembiayaan dalam jumlah bulan */
+  const [tenor, setTenor] = useState<string>('');
+  /** Tanggal mulai akad kredit (default ke tanggal sistem/host hari ini) */
+  const [startDate, setStartDate] = useState<string>(getTodayDate);
+
+  // ============================================================================
+  // 2. STATE HASIL KALKULASI & JADWAL ANGSURAN
+  // ============================================================================
   const [result, setResult] = useState<{
     clientName: string;
     kontrakNo: string;
+    startDate: string;
     otrValue: number;
     pokokUtang: number;
     bungaPersen: number;
@@ -24,12 +62,46 @@ export default function LoanCalculator() {
     }>;
   } | null>(null);
 
-  const [checkDate, setCheckDate] = useState<string>('2024-08-14');
-  
-  // State untuk Fitur Denda
-  const [lastPaidInstallment, setLastPaidInstallment] = useState<string>('5'); // Karena dibayar sampai angsuran bulan mei (angsuran ke-5)
-  const [checkDateDenda, setCheckDateDenda] = useState<string>('2024-08-14');
+  // ============================================================================
+  // 3. STATE FITUR PENGECEKAN TANGGAL & DENDA
+  // ============================================================================
+  /** Tanggal batas pengecekan total angsuran jatuh tempo */
+  const [checkDate, setCheckDate] = useState<string>(getTodayDate);
+  /** Angsuran ke-berapa yang terakhir telah lunas dibayar oleh klien */
+  const [lastPaidInstallment, setLastPaidInstallment] = useState<string>('5');
+  /** Tanggal batas pengecekan denda keterlambatan */
+  const [checkDateDenda, setCheckDateDenda] = useState<string>(getTodayDate);
 
+  // ============================================================================
+  // 4. EFEK SINKRONISASI WAKTU SISTEM HOST
+  // ============================================================================
+  /**
+   * Menjamin sinkronisasi tanggal awal dengan sistem klien/host pengguna
+   * setelah komponen di-mount di browser.
+   */
+  useEffect(() => {
+    const today = getTodayDate();
+    setStartDate(today);
+    setCheckDate(today);
+    setCheckDateDenda(today);
+  }, []);
+
+  // ============================================================================
+  // 5. FUNGSI LOGIKA PERHITUNGAN KREDIT
+  // ============================================================================
+  /**
+   * Menghitung rincian simulasi pinjaman dan membuat jadwal angsuran:
+   * - Pokok Utang = OTR - Uang Muka (DP)
+   * - Skema Bunga Flat:
+   *     <= 12 bulan : 12%
+   *     13 - 24 bulan : 14%
+   *     > 24 bulan  : 16.5%
+   * - Total Bunga = Pokok Utang * (Bunga% / 100)
+   * - Angsuran Per Bulan = (Pokok Utang + Total Bunga) / Tenor
+   * - Jadwal Jatuh Tempo = Tiap bulan berikutnya dari tanggal mulai kredit
+   *
+   * @param {React.FormEvent} e - Event submit form
+   */
   const calculateLoan = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -67,12 +139,27 @@ export default function LoanCalculator() {
 
     const kontrakNo = 'AGR' + Math.floor(Math.random() * 100000).toString().padStart(5, '0');
 
-    const schedule = [];
-    let startYear = 2023; 
-    let startMonth = 11; // Mulai dari Desember 2023 (jatuh tempo cicilan 1 = 25 Jan 2024)
+    if (!startDate) {
+      alert('Mohon masukkan tanggal mulai kredit');
+      return;
+    }
 
+    const [startYearStr, startMonthStr, startDayStr] = startDate.split('-');
+    const startYear = parseInt(startYearStr, 10);
+    const startMonth = parseInt(startMonthStr, 10) - 1; // 0-indexed month
+    const startDay = parseInt(startDayStr, 10);
+
+    const schedule = [];
     for (let i = 1; i <= tenorValue; i++) {
-      const dueDate = new Date(startYear, startMonth + i, 25);
+      const targetMonth = startMonth + i;
+      const targetDate = new Date(startYear, targetMonth, 1);
+      const year = targetDate.getFullYear();
+      const month = targetDate.getMonth();
+      // Mengatasi batas hari dalam bulan (contoh: 31 Feb -> 28/29 Feb)
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const day = Math.min(startDay, daysInMonth);
+      const dueDate = new Date(year, month, day);
+
       const formattedDate = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}-${String(dueDate.getDate()).padStart(2, '0')}`;
       
       schedule.push({
@@ -84,6 +171,7 @@ export default function LoanCalculator() {
     setResult({
       clientName: clientName.trim() || 'SUGUS',
       kontrakNo,
+      startDate,
       otrValue,
       pokokUtang,
       bungaPersen,
@@ -93,6 +181,12 @@ export default function LoanCalculator() {
     });
   };
 
+  /**
+   * Memformat input angka secara real-time menjadi format pemisah ribuan Rupiah (id-ID).
+   *
+   * @param {string} value - String input langsung dari user
+   * @param {(val: string) => void} setter - State dispatcher untuk menyimpan hasil
+   */
   const handleCurrencyInput = (value: string, setter: (val: string) => void) => {
     const numericValue = value.replace(/[^0-9]/g, '');
     if (numericValue) {
@@ -102,12 +196,25 @@ export default function LoanCalculator() {
     }
   };
 
+  // ============================================================================
+  // 6. NILAI TERKOMPUTASI (MEMOIZED COMPUTATIONS)
+  // ============================================================================
+  /**
+   * Menghitung akumulasi total angsuran yang tanggal jatuh temponya
+   * sudah lewat atau sama dengan checkDate.
+   */
   const totalJatuhTempo = useMemo(() => {
     if (!result || !checkDate) return 0;
     const pastDueSchedules = result.schedule.filter(s => new Date(s.tanggalJatuhTempo) <= new Date(checkDate));
     return pastDueSchedules.length * result.angsuranPerBulan;
   }, [result, checkDate]);
 
+  /**
+   * Menghitung daftar angsuran yang terlambat dibayar beserta rincian dendanya:
+   * - Filter: angsuran > lastPaidInstallment (belum lunas)
+   * - Filter: tanggal jatuh tempo < checkDateDenda (sudah melewati tenggat)
+   * - Perhitungan: Denda = Hari Keterlambatan * 0.1% * Angsuran Per Bulan
+   */
   const dendaSchedules = useMemo(() => {
     if (!result || !checkDateDenda) return [];
     
@@ -133,11 +240,25 @@ export default function LoanCalculator() {
       });
   }, [result, checkDateDenda, lastPaidInstallment]);
 
+  /**
+   * Menghitung grand total keseluruhan denda keterlambatan dari seluruh angsuran tertunggak.
+   */
+  const totalKeseluruhanDenda = useMemo(() => {
+    return dendaSchedules.reduce((acc, curr) => acc + curr.totalDenda, 0);
+  }, [dendaSchedules]);
+
+  // ============================================================================
+  // 7. RENDER JSX
+  // ============================================================================
   return (
     <div className="max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-lg border border-gray-100 mb-20">
       <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Simulasi Kredit Mobil</h2>
       
+      {/* ---------------------------------------------------------------------- */}
+      {/* BLOK 1: Form Input Data Simulasi Kredit                                */}
+      {/* ---------------------------------------------------------------------- */}
       <form onSubmit={calculateLoan} className="space-y-6 max-w-2xl mx-auto">
+        {/* Input Nama Klien */}
         <div>
           <label className="block text-sm font-medium text-gray-900 mb-2">Nama Klien</label>
           <input
@@ -150,6 +271,7 @@ export default function LoanCalculator() {
           />
         </div>
 
+        {/* Input Harga Mobil On The Road (OTR) */}
         <div>
           <label className="block text-sm font-medium text-gray-900 mb-2">Harga Mobil (OTR)</label>
           <div className="relative">
@@ -165,6 +287,7 @@ export default function LoanCalculator() {
           </div>
         </div>
 
+        {/* Pemilihan Tipe Down Payment (Persentase vs Nominal Rupiah) */}
         <div>
           <label className="block text-sm font-medium text-gray-900 mb-2">Tipe Uang Muka (DP)</label>
           <div className="flex gap-4">
@@ -199,6 +322,7 @@ export default function LoanCalculator() {
           </div>
         </div>
 
+        {/* Input Besaran Nilai Down Payment */}
         <div>
           <label className="block text-sm font-medium text-gray-900 mb-2">
             Nilai Uang Muka (DP) {dpType === 'percentage' ? '(%)' : '(Rp)'}
@@ -230,6 +354,7 @@ export default function LoanCalculator() {
           </div>
         </div>
 
+        {/* Input Jangka Waktu / Tenor Pinjaman */}
         <div>
           <label className="block text-sm font-medium text-gray-900 mb-2">Jangka Waktu / Tenor (Bulan)</label>
           <div className="relative">
@@ -246,6 +371,20 @@ export default function LoanCalculator() {
           </div>
         </div>
 
+        {/* Input Tanggal Mulai Kredit */}
+        <div>
+          <label className="block text-sm font-medium text-gray-900 mb-2">Tanggal Mulai Kredit</label>
+          <input
+            type="date"
+            required
+            suppressHydrationWarning
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition-all text-gray-900"
+          />
+        </div>
+
+        {/* Tombol Eksekusi Simulasi */}
         <button
           type="submit"
           className="w-full bg-blue-700 text-white font-bold py-4 rounded-lg hover:bg-blue-800 transition-colors shadow-md hover:shadow-lg active:scale-[0.99]"
@@ -254,8 +393,12 @@ export default function LoanCalculator() {
         </button>
       </form>
 
+      {/* ---------------------------------------------------------------------- */}
+      {/* BLOK HASIL PERHITUNGAN & TABEL KONTRAK                                  */}
+      {/* ---------------------------------------------------------------------- */}
       {result && (
         <div className="mt-12 pt-8 border-t border-gray-200">
+          {/* Sub-blok: Kartu Ringkasan Pokok Utang, Bunga, dan Angsuran */}
           <h3 className="text-xl font-bold text-gray-900 mb-6 text-center">Ringkasan Perhitungan</h3>
           <div className="grid gap-4 max-w-2xl mx-auto mb-10">
             <div className="bg-gray-100 p-4 rounded-lg flex justify-between items-center border border-gray-200">
@@ -272,6 +415,7 @@ export default function LoanCalculator() {
             </div>
           </div>
 
+          {/* Sub-blok: Tabel Ringkasan Data Kontrak */}
           <div className="mb-10 overflow-x-auto">
             <h4 className="text-lg font-bold text-gray-900 mb-4 uppercase">Kontrak</h4>
             <table className="w-full text-left border-collapse border border-gray-300">
@@ -279,6 +423,7 @@ export default function LoanCalculator() {
                 <tr className="bg-gray-50">
                   <th className="border border-gray-300 p-3 text-sm font-bold text-gray-900 uppercase">Kontrak_No</th>
                   <th className="border border-gray-300 p-3 text-sm font-bold text-gray-900 uppercase">Client Name</th>
+                  <th className="border border-gray-300 p-3 text-sm font-bold text-gray-900 uppercase">Tanggal Mulai</th>
                   <th className="border border-gray-300 p-3 text-sm font-bold text-gray-900 uppercase">OTR</th>
                 </tr>
               </thead>
@@ -286,12 +431,14 @@ export default function LoanCalculator() {
                 <tr>
                   <td className="border border-gray-300 p-3 text-gray-800 font-medium">{result.kontrakNo}</td>
                   <td className="border border-gray-300 p-3 text-gray-800 uppercase font-medium">{result.clientName}</td>
+                  <td className="border border-gray-300 p-3 text-gray-800 font-medium">{result.startDate}</td>
                   <td className="border border-gray-300 p-3 text-gray-800 font-medium">{formatRupiah(result.otrValue).replace('Rp', '').trim()}</td>
                 </tr>
               </tbody>
             </table>
           </div>
 
+          {/* Sub-blok: Tabel Jadwal Angsuran & Total */}
           <div className="mb-10 overflow-x-auto">
             <h4 className="text-lg font-bold text-gray-900 mb-4 uppercase">Jadwal_Angsuran</h4>
             <table className="w-full text-left border-collapse border border-gray-300">
@@ -315,10 +462,23 @@ export default function LoanCalculator() {
                   </tr>
                 ))}
               </tbody>
+              <tfoot>
+                <tr className="bg-gray-100 font-bold">
+                  <td colSpan={2} className="border border-gray-300 p-3 text-gray-900 uppercase text-right font-bold">
+                    Total
+                  </td>
+                  <td className="border border-gray-300 p-3 text-gray-900 text-right font-bold">
+                    {formatRupiah(result.schedule.length * result.angsuranPerBulan).replace('Rp', '').trim()}
+                  </td>
+                  <td className="border border-gray-300 p-3 bg-gray-50"></td>
+                </tr>
+              </tfoot>
             </table>
           </div>
 
-          {/* Fitur Pengecekan Jatuh Tempo */}
+          {/* ------------------------------------------------------------------ */}
+          {/* BLOK 2: Fitur Pengecekan Total Angsuran Jatuh Tempo                 */}
+          {/* ------------------------------------------------------------------ */}
           <div className="mb-10 overflow-x-auto bg-red-50 p-6 rounded-xl border border-red-200">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-4">
               <h4 className="text-lg font-bold text-red-900 uppercase">Cek Total Angsuran Jatuh Tempo</h4>
@@ -326,6 +486,7 @@ export default function LoanCalculator() {
                 <label className="text-sm font-bold text-red-800">Per Tanggal:</label>
                 <input 
                   type="date" 
+                  suppressHydrationWarning
                   value={checkDate}
                   onChange={(e) => setCheckDate(e.target.value)}
                   className="px-3 py-2 border border-red-300 rounded-lg focus:ring-red-500 focus:border-red-500 text-gray-900 outline-none"
@@ -353,7 +514,9 @@ export default function LoanCalculator() {
             </table>
           </div>
 
-          {/* Fitur Pengecekan Denda */}
+          {/* ------------------------------------------------------------------ */}
+          {/* BLOK 3: Fitur Pengecekan Denda Keterlambatan Pembayaran            */}
+          {/* ------------------------------------------------------------------ */}
           <div className="overflow-x-auto bg-orange-50 p-6 rounded-xl border border-orange-200">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-4">
               <h4 className="text-lg font-bold text-orange-900 uppercase">Cek Denda Keterlambatan (0.1% / Hari)</h4>
@@ -373,6 +536,7 @@ export default function LoanCalculator() {
                   <label className="text-sm font-bold text-orange-800">Per Tanggal:</label>
                   <input 
                     type="date" 
+                    suppressHydrationWarning
                     value={checkDateDenda}
                     onChange={(e) => setCheckDateDenda(e.target.value)}
                     className="px-3 py-2 border border-orange-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 text-gray-900 outline-none"
@@ -412,6 +576,18 @@ export default function LoanCalculator() {
                   </tr>
                 )}
               </tbody>
+              {dendaSchedules.length > 0 && (
+                <tfoot>
+                  <tr className="bg-orange-100 font-bold">
+                    <td colSpan={4} className="border border-orange-300 p-3 text-orange-950 uppercase text-right">
+                      Total Seluruh Denda:
+                    </td>
+                    <td className="border border-orange-300 p-3 text-red-700 text-right text-lg">
+                      {formatRupiah(totalKeseluruhanDenda).replace('Rp', '').trim()}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
 
