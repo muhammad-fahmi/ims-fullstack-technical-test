@@ -1,14 +1,8 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
 import { formatRupiah } from '@/lib/utils';
+import { useEffect, useMemo, useState } from 'react';
 
-/**
- * Mendapatkan tanggal hari ini dalam format lokal sistem/host (YYYY-MM-DD).
- * Digunakan sebagai nilai default dinamis untuk input tanggal.
- *
- * @returns {string} Tanggal berformat YYYY-MM-DD
- */
 const getTodayDate = (): string => {
   const now = new Date();
   const year = now.getFullYear();
@@ -17,10 +11,6 @@ const getTodayDate = (): string => {
   return `${year}-${month}-${day}`;
 };
 
-
-/**
- * Menentukan opsi untuk tipe DP yang diinginkan
- */
 const dpOptions: Array<{
   type: 'percentage' | 'nominal';
   label: string
@@ -29,36 +19,14 @@ const dpOptions: Array<{
     { type: 'nominal', label: 'Nominal (Rp)' }
   ];
 
-/**
- * Komponen Utama: LoanCalculator
- * 
- * Mengelola seluruh alur simulasi kredit mobil:
- * 1. Form input data pembiayaan (OTR, DP, Tenor, Tanggal Mulai).
- * 2. Perhitungan pokok utang, bunga bertingkat sesuai tenor, dan angsuran per bulan.
- * 3. Pembuatan jadwal angsuran bulanan yang dinamis.
- * 4. Pengecekan total angsuran jatuh tempo per tanggal tertentu.
- * 5. Pengecekan dan kalkulasi denda keterlambatan pembayaran (0.1% per hari).
- */
 export default function LoanCalculator() {
-  // ============================================================================
-  // 1. STATE FORM INPUT SIMULASI
-  // ============================================================================
-  /** Nama calon debitur / klien */
   const [clientName, setClientName] = useState<string>('');
-  /** Harga Mobil On The Road (OTR) dalam format teks terformat (contoh: 240.000.000) */
   const [otr, setOtr] = useState<string>('');
-  /** Jenis input Uang Muka (DP): 'percentage' (%) atau 'nominal' (Rp) */
   const [dpType, setDpType] = useState<'percentage' | 'nominal'>('percentage');
-  /** Nilai DP (berupa angka persentase atau teks nominal Rupiah) */
   const [dpValue, setDpValue] = useState<string>('');
-  /** Jangka waktu pembiayaan dalam jumlah bulan */
   const [tenor, setTenor] = useState<string>('');
-  /** Tanggal mulai akad kredit (default ke tanggal sistem/host hari ini) */
   const [startDate, setStartDate] = useState<string>(getTodayDate);
 
-  // ============================================================================
-  // 2. STATE HASIL KALKULASI & JADWAL ANGSURAN
-  // ============================================================================
   const [result, setResult] = useState<{
     clientName: string;
     kontrakNo: string;
@@ -74,23 +42,10 @@ export default function LoanCalculator() {
     }>;
   } | null>(null);
 
-  // ============================================================================
-  // 3. STATE FITUR PENGECEKAN TANGGAL & DENDA
-  // ============================================================================
-  /** Tanggal batas pengecekan total angsuran jatuh tempo */
   const [checkDate, setCheckDate] = useState<string>(getTodayDate);
-  /** Angsuran ke-berapa yang terakhir telah lunas dibayar oleh klien */
   const [lastPaidInstallment, setLastPaidInstallment] = useState<string>('5');
-  /** Tanggal batas pengecekan denda keterlambatan */
   const [checkDateDenda, setCheckDateDenda] = useState<string>(getTodayDate);
 
-  // ============================================================================
-  // 4. EFEK SINKRONISASI WAKTU SISTEM HOST
-  // ============================================================================
-  /**
-   * Menjamin sinkronisasi tanggal awal dengan sistem klien/host pengguna
-   * setelah komponen di-mount di browser.
-   */
   useEffect(() => {
     const today = getTodayDate();
     setStartDate(today);
@@ -98,22 +53,6 @@ export default function LoanCalculator() {
     setCheckDateDenda(today);
   }, []);
 
-  // ============================================================================
-  // 5. FUNGSI LOGIKA PERHITUNGAN KREDIT
-  // ============================================================================
-  /**
-   * Menghitung rincian simulasi pinjaman dan membuat jadwal angsuran:
-   * - Pokok Utang = OTR - Uang Muka (DP)
-   * - Skema Bunga Flat:
-   *     <= 12 bulan : 12%
-   *     13 - 24 bulan : 14%
-   *     > 24 bulan  : 16.5%
-   * - Total Bunga = Pokok Utang * (Bunga% / 100)
-   * - Angsuran Per Bulan = (Pokok Utang + Total Bunga) / Tenor
-   * - Jadwal Jatuh Tempo = Tiap bulan berikutnya dari tanggal mulai kredit
-   *
-   * @param {React.FormEvent} e - Event submit form
-   */
   const calculateLoan = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -135,19 +74,8 @@ export default function LoanCalculator() {
     }
 
     const pokokUtang = otrValue - dpActualValue;
-
-    // let bungaPersen = 0;
-    // if (tenorValue <= 12) {
-    //   bungaPersen = 12;
-    // } else if (tenorValue > 12 && tenorValue <= 24) {
-    //   bungaPersen = 14;
-    // } else if (tenorValue > 24) {
-    //   bungaPersen = 16.5;
-    // }
-
     const bungaPersen = tenorValue <= 12 ? 12 : tenorValue <= 24 ? 14 : 16.5;
-    // const bunga = bungaPersen / 100;
-    // const totalBunga = pokokUtang * bunga;
+
     const totalBunga = pokokUtang * (bungaPersen / 100);
     const totalUtang = pokokUtang + totalBunga;
     const angsuranPerBulan = totalUtang / tenorValue;
@@ -161,34 +89,14 @@ export default function LoanCalculator() {
 
     const [startYearStr, startMonthStr, startDayStr] = startDate.split('-');
     const startYear = parseInt(startYearStr, 10);
-    const startMonth = parseInt(startMonthStr, 10) - 1; // 0-indexed month
+    const startMonth = parseInt(startMonthStr, 10) - 1;
     const startDay = parseInt(startDayStr, 10);
-
-    // const schedule = [];
-    // for (let i = 1; i <= tenorValue; i++) {
-    //   const targetMonth = startMonth + i;
-    //   const targetDate = new Date(startYear, targetMonth, 1);
-    //   const year = targetDate.getFullYear();
-    //   const month = targetDate.getMonth();
-    //   // Mengatasi batas hari dalam bulan (contoh: 31 Feb -> 28/29 Feb)
-    //   const daysInMonth = new Date(year, month + 1, 0).getDate();
-    //   const day = Math.min(startDay, daysInMonth);
-    //   const dueDate = new Date(year, month, day);
-
-    //   const formattedDate = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}-${String(dueDate.getDate()).padStart(2, '0')}`;
-
-    //   schedule.push({
-    //     angsuranKe: i,
-    //     tanggalJatuhTempo: formattedDate,
-    //   });
-    // }
 
     const schedule = Array.from({ length: tenorValue }, (_, index) => {
       const targetMonth = startMonth + (index + 1);
       const targetDate = new Date(startYear, targetMonth, 1);
       const year = targetDate.getFullYear();
       const month = targetDate.getMonth();
-      // Mengatasi batas hari dalam bulan (contoh: 31 Feb -> 28/29 Feb)
       const daysInMonth = new Date(year, month + 1, 0).getDate();
       const day = Math.min(startDay, daysInMonth);
       const dueDate = new Date(year, month, day);
@@ -214,12 +122,6 @@ export default function LoanCalculator() {
     });
   };
 
-  /**
-   * Memformat input angka secara real-time menjadi format pemisah ribuan Rupiah (id-ID).
-   *
-   * @param {string} value - String input langsung dari user
-   * @param {(val: string) => void} setter - State dispatcher untuk menyimpan hasil
-   */
   const handleCurrencyInput = (value: string, setter: (val: string) => void) => {
     const numericValue = value.replace(/[^0-9]/g, '');
     if (numericValue) {
@@ -228,20 +130,6 @@ export default function LoanCalculator() {
       setter('');
     }
   };
-
-  // ============================================================================
-  // 6. NILAI TERKOMPUTASI (MEMOIZED COMPUTATIONS)
-  // ============================================================================
-  /**
-   * Menghitung akumulasi total angsuran yang tanggal jatuh temponya
-   * sudah lewat atau sama dengan checkDate.
-   */
-
-  // const totalJatuhTempo = useMemo(() => {
-  //   if (!result || !checkDate) return 0;
-  //   const pastDueSchedules = result.schedule.filter(s => new Date(s.tanggalJatuhTempo) <= new Date(checkDate));
-  //   return pastDueSchedules.length * result.angsuranPerBulan;
-  // }, [result, checkDate]);
 
   const totalJatuhTempo = useMemo(() => {
     if (!result || !checkDate) return 0;
@@ -252,37 +140,6 @@ export default function LoanCalculator() {
       return acc;
     }, 0);
   }, [result, checkDate]);
-
-  /**
-   * Menghitung daftar angsuran yang terlambat dibayar beserta rincian dendanya:
-   * - Filter: angsuran > lastPaidInstallment (belum lunas)
-   * - Filter: tanggal jatuh tempo < checkDateDenda (sudah melewati tenggat)
-   * - Perhitungan: Denda = Hari Keterlambatan * 0.1% * Angsuran Per Bulan
-   */
-  // const dendaSchedules = useMemo(() => {
-  //   if (!result || !checkDateDenda) return [];
-
-  //   const checkDateObj = new Date(checkDateDenda);
-  //   const lastPaid = Number(lastPaidInstallment);
-
-  //   return result.schedule
-  //     .filter(s => s.angsuranKe > lastPaid) // Belum dibayar
-  //     .filter(s => new Date(s.tanggalJatuhTempo) < checkDateObj) // Sudah lewat jatuh tempo
-  //     .map(s => {
-  //       const dueDateObj = new Date(s.tanggalJatuhTempo);
-  //       const diffTime = checkDateObj.getTime() - dueDateObj.getTime();
-  //       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-  //       // Denda 0.1% per hari dari angsuran per bulan
-  //       const totalDenda = diffDays * 0.001 * result.angsuranPerBulan;
-
-  //       return {
-  //         ...s,
-  //         hariKeterlambatan: diffDays,
-  //         totalDenda: totalDenda
-  //       };
-  //     });
-  // }, [result, checkDateDenda, lastPaidInstallment]);
 
   const dendaSchedules = useMemo(() => {
     if (!result || !checkDateDenda) return [];
@@ -297,7 +154,6 @@ export default function LoanCalculator() {
           const diffTime = checkDateObj.getTime() - dueDateObj.getTime();
           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-          // Denda 0.1% per hari dari angsuran per bulan
           const totalDenda = diffDays * 0.001 * result.angsuranPerBulan;
 
           return [
@@ -313,121 +169,91 @@ export default function LoanCalculator() {
       }, [] as Array<typeof result.schedule[0] & { hariKeterlambatan: number; totalDenda: number }>);
   }, [result, checkDateDenda, lastPaidInstallment]);
 
-
-  /**
-   * Menghitung grand total keseluruhan denda keterlambatan dari seluruh angsuran tertunggak.
-   */
   const totalKeseluruhanDenda = useMemo(() => {
     return dendaSchedules.reduce((acc, curr) => acc + curr.totalDenda, 0);
   }, [dendaSchedules]);
 
-  // ============================================================================
-  // 7. RENDER JSX
-  // ============================================================================
-
   return (
-    <div className="max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-lg border border-gray-100 mb-20">
-      <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Simulasi Kredit Mobil</h2>
+    <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+      {/* Form Header */}
+      <div className="bg-gradient-to-r from-blue-700 to-blue-900 px-8 py-6 sm:py-8">
+        <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">Simulasi Kredit Mobil</h2>
+        <p className="text-blue-100 text-sm mt-1">Input data pembiayaan untuk kalkulasi cicilan real-time</p>
+      </div>
 
-      {/* ---------------------------------------------------------------------- */}
-      {/* BLOK 1: Form Input Data Simulasi Kredit                                */}
-      {/* ---------------------------------------------------------------------- */}
-      <form onSubmit={calculateLoan} className="space-y-6 max-w-2xl mx-auto">
+      {/* Form Body */}
+      <form onSubmit={calculateLoan} className="p-8 space-y-6 max-w-2xl mx-auto">
         {/* Input Nama Klien */}
         <div>
-          <label className="block text-sm font-medium text-gray-900 mb-2">Nama Klien</label>
+          <label className="block text-sm font-semibold text-slate-900 mb-2">
+            <span className="text-red-500">*</span> Nama Klien
+          </label>
           <input
             type="text"
             required
             value={clientName}
             onChange={(e) => setClientName(e.target.value)}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition-all placeholder:text-gray-500 text-gray-900"
+            className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all placeholder:text-slate-400 text-slate-900 font-medium"
             placeholder="Contoh: Sugus"
           />
         </div>
 
-        {/* Input Harga Mobil On The Road (OTR) */}
+        {/* Input Harga Mobil OTR */}
         <div>
-          <label className="block text-sm font-medium text-gray-900 mb-2">Harga Mobil (OTR)</label>
+          <label className="block text-sm font-semibold text-slate-900 mb-2">
+            <span className="text-red-500">*</span> Harga Mobil (OTR)
+          </label>
           <div className="relative">
-            <span className="absolute left-4 top-3 text-gray-700">Rp</span>
+            <span className="absolute left-4 top-3.5 text-slate-600 font-semibold">Rp</span>
             <input
               type="text"
               required
               value={otr}
               onChange={(e) => handleCurrencyInput(e.target.value, setOtr)}
-              className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition-all placeholder:text-gray-500 text-gray-900"
+              className="w-full pl-12 pr-4 py-3 border-2 border-slate-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all placeholder:text-slate-400 text-slate-900 font-medium"
               placeholder="Contoh: 240.000.000"
             />
           </div>
         </div>
 
-        {/* Pemilihan Tipe Down Payment (Persentase vs Nominal Rupiah) */}
+        {/* Pemilihan Tipe DP */}
         <div>
-          <label className="block text-sm font-medium text-gray-900 mb-2">Tipe Uang Muka (DP)</label>
-          <div className="flex gap-4">
-            {dpOptions.map(opt => {
-              return (
-                <label
-                  key={opt.type}
-                  className="flex-1 flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                  <input
-                    type="radio"
-                    name="dpType"
-                    value={opt.type}
-                    checked={dpType === opt.type}
-                    onChange={() => {
-                      setDpType(opt.type);
-                      setDpValue('');
-                    }}
-                    className="w-4 h-4 text-blue-700 border-gray-400 focus:ring-blue-600"
-                  />
-                  <span className="ml-3 text-gray-900 font-medium">{opt.label}</span>
-                </label>
-              );
-            })}
-
-            {/* <label className="flex-1 flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-              <input
-                type="radio"
-                name="dpType"
-                value="percentage"
-                checked={dpType === 'percentage'}
-                onChange={() => {
-                  setDpType('percentage');
-                  setDpValue('');
-                }}
-                className="w-4 h-4 text-blue-700 border-gray-400 focus:ring-blue-600"
-              />
-              <span className="ml-3 text-gray-900 font-medium">Persentase (%)</span>
-            </label> */}
-
-            {/* <label className="flex-1 flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-              <input
-                type="radio"
-                name="dpType"
-                value="nominal"
-                checked={dpType === 'nominal'}
-                onChange={() => {
-                  setDpType('nominal');
-                  setDpValue('');
-                }}
-                className="w-4 h-4 text-blue-700 border-gray-400 focus:ring-blue-600"
-              />
-              <span className="ml-3 text-gray-900 font-medium">Nominal (Rp)</span>
-            </label> */}
-
+          <label className="block text-sm font-semibold text-slate-900 mb-3">
+            <span className="text-red-500">*</span> Tipe Uang Muka (DP)
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            {dpOptions.map(opt => (
+              <label
+                key={opt.type}
+                className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition-all ${dpType === opt.type
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-slate-200 hover:border-slate-300'
+                  }`}>
+                <input
+                  type="radio"
+                  name="dpType"
+                  value={opt.type}
+                  checked={dpType === opt.type}
+                  onChange={() => {
+                    setDpType(opt.type);
+                    setDpValue('');
+                  }}
+                  className="w-4 h-4 text-blue-600 border-slate-400 focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="ml-2.5 text-slate-900 font-medium text-sm">{opt.label}</span>
+              </label>
+            ))}
           </div>
         </div>
 
-        {/* Input Besaran Nilai Down Payment */}
+        {/* Input Nilai DP */}
         <div>
-          <label className="block text-sm font-medium text-gray-900 mb-2">
-            Nilai Uang Muka (DP) {dpType === 'percentage' ? '(%)' : '(Rp)'}
+          <label className="block text-sm font-semibold text-slate-900 mb-2">
+            <span className="text-red-500">*</span> Nilai Uang Muka (DP) {dpType === 'percentage' ? '(%)' : '(Rp)'}
           </label>
           <div className="relative">
             {dpType === 'nominal' && (
-              <span className="absolute left-4 top-3 text-gray-700">Rp</span>
+              <span className="absolute left-4 top-3.5 text-slate-600 font-semibold">Rp</span>
             )}
             <input
               type={dpType === 'percentage' ? "number" : "text"}
@@ -444,18 +270,20 @@ export default function LoanCalculator() {
                   setDpValue(e.target.value);
                 }
               }}
-              className={`w-full ${dpType === 'nominal' ? 'pl-12' : 'pl-4'} pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition-all placeholder:text-gray-500 text-gray-900`}
+              className={`w-full ${dpType === 'nominal' ? 'pl-12' : 'pl-4'} pr-4 py-3 border-2 border-slate-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all placeholder:text-slate-400 text-slate-900 font-medium`}
               placeholder={dpType === 'percentage' ? "Contoh: 20" : "Contoh: 48.000.000"}
             />
             {dpType === 'percentage' && (
-              <span className="absolute right-4 top-3 text-gray-700">%</span>
+              <span className="absolute right-4 top-3.5 text-slate-600 font-semibold">%</span>
             )}
           </div>
         </div>
 
-        {/* Input Jangka Waktu / Tenor Pinjaman */}
+        {/* Input Tenor */}
         <div>
-          <label className="block text-sm font-medium text-gray-900 mb-2">Jangka Waktu / Tenor (Bulan)</label>
+          <label className="block text-sm font-semibold text-slate-900 mb-2">
+            <span className="text-red-500">*</span> Jangka Waktu / Tenor (Bulan)
+          </label>
           <div className="relative">
             <input
               type="number"
@@ -464,38 +292,38 @@ export default function LoanCalculator() {
               value={tenor}
               onWheel={(e) => e.currentTarget.blur()}
               onChange={(e) => setTenor(e.target.value)}
-              className="w-full pl-4 pr-16 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition-all placeholder:text-gray-500 text-gray-900"
+              className="w-full pl-4 pr-16 py-3 border-2 border-slate-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all placeholder:text-slate-400 text-slate-900 font-medium"
               placeholder="Contoh: 18"
             />
-            <span className="absolute right-4 top-3 text-gray-700 font-medium">Bulan</span>
+            <span className="absolute right-4 top-3.5 text-slate-600 font-semibold">Bulan</span>
           </div>
         </div>
 
-        {/* Input Tanggal Mulai Kredit */}
+        {/* Input Tanggal Mulai */}
         <div>
-          <label className="block text-sm font-medium text-gray-900 mb-2">Tanggal Mulai Kredit</label>
+          <label className="block text-sm font-semibold text-slate-900 mb-2">
+            <span className="text-red-500">*</span> Tanggal Mulai Kredit
+          </label>
           <input
             type="date"
             required
             suppressHydrationWarning
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition-all text-gray-900"
+            className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-slate-900 font-medium"
           />
         </div>
 
-        {/* Tombol Eksekusi Simulasi */}
+        {/* Submit Button */}
         <button
           type="submit"
-          className="w-full bg-blue-700 text-white font-bold py-4 rounded-lg hover:bg-blue-800 transition-colors shadow-md hover:shadow-lg active:scale-[0.99]"
+          className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-4 rounded-lg transition-all shadow-lg hover:shadow-xl active:scale-[0.98] mt-8"
         >
           Hitung Simulasi
         </button>
       </form>
 
-      {/* ---------------------------------------------------------------------- */}
-      {/* BLOK HASIL PERHITUNGAN & TABEL KONTRAK                                  */}
-      {/* ---------------------------------------------------------------------- */}
+      {/* Results Area */}
       {result && (() => {
         const summaryItems = [
           { label: 'Pokok Utang', value: formatRupiah(result?.pokokUtang ?? 0) },
@@ -503,101 +331,101 @@ export default function LoanCalculator() {
         ];
 
         return (
-          <div className="mt-12 pt-8 border-t border-gray-200">
-            {/* Sub-blok: Kartu Ringkasan Pokok Utang, Bunga, dan Angsuran */}
-            <h3 className="text-xl font-bold text-gray-900 mb-6 text-center">Ringkasan Perhitungan</h3>
-            <div className="grid gap-4 max-w-2xl mx-auto mb-10">
-              {summaryItems.map((opt, index) => {
-                return (
+          <div className="px-8 pb-8 pt-0">
+            {/* Summary Cards */}
+            <div className="mb-8">
+              <h3 className="text-xl font-bold text-slate-900 mb-6 text-center">Ringkasan Perhitungan</h3>
+              <div className="grid gap-3 max-w-2xl mx-auto mb-6">
+                {summaryItems.map((opt, index) => (
                   <div
                     key={index}
-                    className="bg-gray-100 p-4 rounded-lg flex justify-between items-center border border-gray-200">
-                    <span className="text-gray-800 font-medium">{opt.label}</span>
-                    <span className="font-bold text-gray-900">{opt.value}</span>
+                    className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex justify-between items-center">
+                    <span className="text-slate-800 font-medium">{opt.label}</span>
+                    <span className="font-bold text-slate-900">{opt.value}</span>
                   </div>
-                )
-              })}
-              {/* <div className="bg-gray-100 p-4 rounded-lg flex justify-between items-center border border-gray-200">
-              <span className="text-gray-800 font-medium">Pokok Utang</span>
-              <span className="font-bold text-gray-900">{formatRupiah(result.pokokUtang)}</span>
-            </div>
-            <div className="bg-gray-100 p-4 rounded-lg flex justify-between items-center border border-gray-200">
-              <span className="text-gray-800 font-medium">Bunga ({result.bungaPersen}%)</span>
-              <span className="font-bold text-gray-900">{formatRupiah(result.totalBunga)}</span>
-            </div> */}
-              <div className="bg-blue-50 p-6 rounded-xl border border-blue-200 flex flex-col items-center gap-2">
-                <span className="text-blue-800 font-bold text-sm uppercase tracking-wider">Angsuran Per Bulan</span>
-                <span className="text-3xl font-extrabold text-blue-900">{formatRupiah(result.angsuranPerBulan)}</span>
+                ))}
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-200 flex flex-col items-center gap-2">
+                  <span className="text-blue-800 font-bold text-sm uppercase tracking-wider">Angsuran Per Bulan</span>
+                  <span className="text-3xl font-extrabold text-blue-900">{formatRupiah(result.angsuranPerBulan)}</span>
+                </div>
               </div>
             </div>
 
-            {/* Sub-blok: Tabel Ringkasan Data Kontrak */}
-            <div className="mb-10 overflow-x-auto">
-              <h4 className="text-lg font-bold text-gray-900 mb-4 uppercase">Kontrak</h4>
-              <table className="w-full text-left border-collapse border border-gray-300">
+            {/* Kontrak Table */}
+            <div className="mb-10">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-lg font-bold text-slate-900 uppercase">Kontrak</h4>
+                <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
+                  ID: {result.kontrakNo}
+                </span>
+              </div>
+              <table className="w-full text-left border-collapse border border-slate-300 rounded-lg overflow-hidden">
                 <thead>
-                  <tr className="bg-gray-50">
-                    <th className="border border-gray-300 p-3 text-sm font-bold text-gray-900 uppercase">Kontrak_No</th>
-                    <th className="border border-gray-300 p-3 text-sm font-bold text-gray-900 uppercase">Client Name</th>
-                    <th className="border border-gray-300 p-3 text-sm font-bold text-gray-900 uppercase">Tanggal Mulai</th>
-                    <th className="border border-gray-300 p-3 text-sm font-bold text-gray-900 uppercase">OTR</th>
+                  <tr className="bg-slate-100">
+                    <th className="border border-slate-300 p-3 text-sm font-bold text-slate-900 uppercase">Kontrak_No</th>
+                    <th className="border border-slate-300 p-3 text-sm font-bold text-slate-900 uppercase">Client Name</th>
+                    <th className="border border-slate-300 p-3 text-sm font-bold text-slate-900 uppercase">Tanggal Mulai</th>
+                    <th className="border border-slate-300 p-3 text-sm font-bold text-slate-900 uppercase">OTR</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr>
-                    <td className="border border-gray-300 p-3 text-gray-800 font-medium">{result.kontrakNo}</td>
-                    <td className="border border-gray-300 p-3 text-gray-800 uppercase font-medium">{result.clientName}</td>
-                    <td className="border border-gray-300 p-3 text-gray-800 font-medium">{result.startDate}</td>
-                    <td className="border border-gray-300 p-3 text-gray-800 font-medium">{formatRupiah(result.otrValue).replace('Rp', '').trim()}</td>
+                  <tr className="hover:bg-slate-50 transition-colors">
+                    <td className="border border-slate-300 p-3 text-slate-800 font-medium">{result.kontrakNo}</td>
+                    <td className="border border-slate-300 p-3 text-slate-800 uppercase font-medium">{result.clientName}</td>
+                    <td className="border border-slate-300 p-3 text-slate-800 font-medium">{result.startDate}</td>
+                    <td className="border border-slate-300 p-3 text-slate-800 font-medium">{formatRupiah(result.otrValue).replace('Rp', '').trim()}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
 
-            {/* Sub-blok: Tabel Jadwal Angsuran & Total */}
-            <div className="mb-10 overflow-x-auto">
-              <h4 className="text-lg font-bold text-gray-900 mb-4 uppercase">Jadwal_Angsuran</h4>
-              <table className="w-full text-left border-collapse border border-gray-300">
-                <thead>
-                  <tr className="bg-gray-50">
-                    <th className="border border-gray-300 p-3 text-sm font-bold text-gray-900 uppercase">Kontrak_No</th>
-                    <th className="border border-gray-300 p-3 text-sm font-bold text-gray-900 uppercase text-center">Angsuran_Ke</th>
-                    <th className="border border-gray-300 p-3 text-sm font-bold text-gray-900 uppercase text-right">Angsuran_Per_Bulan</th>
-                    <th className="border border-gray-300 p-3 text-sm font-bold text-gray-900 uppercase text-center">Tanggal_Jatuh_Tempo</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.schedule.map((row) => (
-                    <tr key={row.angsuranKe} className="hover:bg-gray-50 transition-colors">
-                      <td className="border border-gray-300 p-3 text-gray-800 font-medium">{result.kontrakNo}</td>
-                      <td className="border border-gray-300 p-3 text-gray-800 text-center">{row.angsuranKe}</td>
-                      <td className="border border-gray-300 p-3 text-gray-800 text-right font-medium">
-                        {formatRupiah(result.angsuranPerBulan).replace('Rp', '').trim()}
-                      </td>
-                      <td className="border border-gray-300 p-3 text-gray-800 text-center">{row.tanggalJatuhTempo}</td>
+            {/* Jadwal Angsuran Table */}
+            <div className="mb-10">
+              <h4 className="text-lg font-bold text-slate-900 mb-4 uppercase">Jadwal Angsuran</h4>
+              <div className="overflow-x-auto border border-slate-300 rounded-lg">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-100">
+                      <th className="border border-slate-300 p-3 text-sm font-bold text-slate-900 uppercase">Kontrak_No</th>
+                      <th className="border border-slate-300 p-3 text-sm font-bold text-slate-900 uppercase text-center">Angsuran_Ke</th>
+                      <th className="border border-slate-300 p-3 text-sm font-bold text-slate-900 uppercase text-right">Angsuran_Per_Bulan</th>
+                      <th className="border border-slate-300 p-3 text-sm font-bold text-slate-900 uppercase text-center">Tanggal_Jatuh_Tempo</th>
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-gray-100 font-bold">
-                    <td colSpan={2} className="border border-gray-300 p-3 text-gray-900 uppercase text-right font-bold">
-                      Total
-                    </td>
-                    <td className="border border-gray-300 p-3 text-gray-900 text-right font-bold">
-                      {formatRupiah(result.schedule.length * result.angsuranPerBulan).replace('Rp', '').trim()}
-                    </td>
-                    <td className="border border-gray-300 p-3 bg-gray-50"></td>
-                  </tr>
-                </tfoot>
-              </table>
+                  </thead>
+                  <tbody>
+                    {result.schedule.map((row) => (
+                      <tr key={row.angsuranKe} className="hover:bg-slate-50 transition-colors">
+                        <td className="border border-slate-300 p-3 text-slate-800 font-medium">{result.kontrakNo}</td>
+                        <td className="border border-slate-300 p-3 text-slate-800 text-center">{row.angsuranKe}</td>
+                        <td className="border border-slate-300 p-3 text-slate-800 text-right font-medium">
+                          {formatRupiah(result.angsuranPerBulan).replace('Rp', '').trim()}
+                        </td>
+                        <td className="border border-slate-300 p-3 text-slate-800 text-center">{row.tanggalJatuhTempo}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-slate-100 font-bold">
+                      <td colSpan={2} className="border border-slate-300 p-3 text-slate-900 uppercase text-right font-bold">
+                        Total
+                      </td>
+                      <td className="border border-slate-300 p-3 text-slate-900 text-right font-bold">
+                        {formatRupiah(result.schedule.length * result.angsuranPerBulan).replace('Rp', '').trim()}
+                      </td>
+                      <td className="border border-slate-300 p-3 bg-slate-100"></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
             </div>
 
-            {/* ------------------------------------------------------------------ */}
-            {/* BLOK 2: Fitur Pengecekan Total Angsuran Jatuh Tempo                 */}
-            {/* ------------------------------------------------------------------ */}
-            <div className="mb-10 overflow-x-auto bg-red-50 p-6 rounded-xl border border-red-200">
+            {/* Total Angsuran Jatuh Tempo */}
+            <div className="mb-10 bg-gradient-to-br from-red-50 via-white to-red-50 p-6 rounded-xl border border-red-200 shadow-sm">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-4">
-                <h4 className="text-lg font-bold text-red-900 uppercase">Cek Total Angsuran Jatuh Tempo</h4>
+                <div>
+                  <h4 className="text-lg font-bold text-red-900 uppercase">Cek Total Angsuran Jatuh Tempo</h4>
+                  <p className="text-sm text-red-700/80 mt-1">Total yang sudah jatuh tempo hingga tanggal tertentu</p>
+                </div>
                 <div className="flex items-center gap-3">
                   <label className="text-sm font-bold text-red-800">Per Tanggal:</label>
                   <input
@@ -605,47 +433,51 @@ export default function LoanCalculator() {
                     suppressHydrationWarning
                     value={checkDate}
                     onChange={(e) => setCheckDate(e.target.value)}
-                    className="px-3 py-2 border border-red-300 rounded-lg focus:ring-red-500 focus:border-red-500 text-gray-900 outline-none"
+                    className="px-3 py-2 border border-red-300 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-slate-900 outline-none font-medium"
                   />
                 </div>
               </div>
 
-              <table className="w-full text-left border-collapse border border-red-300 bg-white">
-                <thead>
-                  <tr className="bg-red-100">
-                    <th className="border border-red-300 p-3 text-sm font-bold text-red-900 uppercase">Kontrak No</th>
-                    <th className="border border-red-300 p-3 text-sm font-bold text-red-900 uppercase">Client Name</th>
-                    <th className="border border-red-300 p-3 text-sm font-bold text-red-900 uppercase">Total Angsuran Jatuh Tempo</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td className="border border-red-300 p-3 text-gray-800 font-medium">{result.kontrakNo}</td>
-                    <td className="border border-red-300 p-3 text-gray-800 uppercase font-medium">{result.clientName}</td>
-                    <td className="border border-red-300 p-3 text-gray-900 font-bold text-lg">
-                      {totalJatuhTempo > 0 ? formatRupiah(totalJatuhTempo).replace('Rp', '').trim() : '0'}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+              <div className="overflow-x-auto border border-red-300 rounded-lg bg-white">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-red-100">
+                      <th className="border border-red-300 p-3 text-sm font-bold text-red-900 uppercase">Kontrak No</th>
+                      <th className="border border-red-300 p-3 text-sm font-bold text-red-900 uppercase">Client Name</th>
+                      <th className="border border-red-300 p-3 text-sm font-bold text-red-900 uppercase">Total Angsuran Jatuh Tempo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td className="border border-red-300 p-3 text-slate-800 font-medium">{result.kontrakNo}</td>
+                      <td className="border border-red-300 p-3 text-slate-800 uppercase font-medium">{result.clientName}</td>
+                      <td className="border border-red-300 p-3 text-slate-900 font-bold text-lg">
+                        {totalJatuhTempo > 0 ? formatRupiah(totalJatuhTempo).replace('Rp', '').trim() : '0'}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
 
-            {/* ------------------------------------------------------------------ */}
-            {/* BLOK 3: Fitur Pengecekan Denda Keterlambatan Pembayaran            */}
-            {/* ------------------------------------------------------------------ */}
-            <div className="overflow-x-auto bg-orange-50 p-6 rounded-xl border border-orange-200">
+            {/* Denda Keterlambatan */}
+            <div className="bg-gradient-to-br from-orange-50 via-white to-orange-50 p-6 rounded-xl border border-orange-200 shadow-sm">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-4">
-                <h4 className="text-lg font-bold text-orange-900 uppercase">Cek Denda Keterlambatan (0.1% / Hari)</h4>
+                <div>
+                  <h4 className="text-lg font-bold text-orange-900 uppercase">Cek Denda Keterlambatan (0.1% / Hari)</h4>
+                  <p className="text-sm text-orange-700/80 mt-1">Hitung denda untuk angsuran yang belum dibayar melewati jatuh tempo</p>
+                </div>
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                   <div className="flex items-center gap-3">
-                    <label className="text-sm font-bold text-orange-800">Terakhir Bayar (Angsuran Ke):</label>
+                    <label className="text-sm font-bold text-orange-800">Terakhir Bayar:</label>
                     <input
                       type="number"
                       min="0"
                       max={result.schedule.length}
                       value={lastPaidInstallment}
                       onChange={(e) => setLastPaidInstallment(e.target.value)}
-                      className="w-20 px-3 py-2 border border-orange-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 text-gray-900 outline-none"
+                      className="w-24 px-3 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 text-slate-900 outline-none font-medium"
+                      placeholder="Angsuran ke"
                     />
                   </div>
                   <div className="flex items-center gap-3">
@@ -655,58 +487,69 @@ export default function LoanCalculator() {
                       suppressHydrationWarning
                       value={checkDateDenda}
                       onChange={(e) => setCheckDateDenda(e.target.value)}
-                      className="px-3 py-2 border border-orange-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 text-gray-900 outline-none"
+                      className="px-3 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 text-slate-900 outline-none font-medium"
                     />
                   </div>
                 </div>
               </div>
 
-              <table className="w-full text-left border-collapse border border-orange-300 bg-white">
-                <thead>
-                  <tr className="bg-orange-100">
-                    <th className="border border-orange-300 p-3 text-sm font-bold text-orange-900 uppercase">Kontrak No</th>
-                    <th className="border border-orange-300 p-3 text-sm font-bold text-orange-900 uppercase">Client Name</th>
-                    <th className="border border-orange-300 p-3 text-sm font-bold text-orange-900 uppercase text-center">Installment No</th>
-                    <th className="border border-orange-300 p-3 text-sm font-bold text-orange-900 uppercase text-center">Hari Keterlambatan</th>
-                    <th className="border border-orange-300 p-3 text-sm font-bold text-orange-900 uppercase text-right">Total Denda</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dendaSchedules.length > 0 ? (
-                    dendaSchedules.map((s) => (
-                      <tr key={s.angsuranKe} className="hover:bg-orange-50 transition-colors">
-                        <td className="border border-orange-300 p-3 text-gray-800 font-medium">{result.kontrakNo}</td>
-                        <td className="border border-orange-300 p-3 text-gray-800 uppercase font-medium">{result.clientName}</td>
-                        <td className="border border-orange-300 p-3 text-gray-800 text-center font-bold">{s.angsuranKe}</td>
-                        <td className="border border-orange-300 p-3 text-orange-700 text-center font-bold">{s.hariKeterlambatan} Hari</td>
-                        <td className="border border-orange-300 p-3 text-gray-900 text-right font-bold text-lg">
-                          {formatRupiah(s.totalDenda).replace('Rp', '').trim()}
+              <div className="overflow-x-auto border border-orange-300 rounded-lg bg-white">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-orange-100">
+                      <th className="border border-orange-300 p-3 text-sm font-bold text-orange-900 uppercase">Kontrak No</th>
+                      <th className="border border-orange-300 p-3 text-sm font-bold text-orange-900 uppercase">Client Name</th>
+                      <th className="border border-orange-300 p-3 text-sm font-bold text-orange-900 uppercase text-center">Installment No</th>
+                      <th className="border border-orange-300 p-3 text-sm font-bold text-orange-900 uppercase text-center">Hari Keterlambatan</th>
+                      <th className="border border-orange-300 p-3 text-sm font-bold text-orange-900 uppercase text-right">Total Denda</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dendaSchedules.length > 0 ? (
+                      dendaSchedules.map((s) => (
+                        <tr key={s.angsuranKe} className="hover:bg-orange-50 transition-colors">
+                          <td className="border border-orange-300 p-3 text-slate-800 font-medium">{result.kontrakNo}</td>
+                          <td className="border border-orange-300 p-3 text-slate-800 uppercase font-medium">{result.clientName}</td>
+                          <td className="border border-orange-300 p-3 text-slate-800 text-center font-bold">{s.angsuranKe}</td>
+                          <td className="border border-orange-300 p-3 text-orange-700 text-center font-bold">{s.hariKeterlambatan} Hari</td>
+                          <td className="border border-orange-300 p-3 text-slate-900 text-right font-bold text-lg">
+                            {formatRupiah(s.totalDenda).replace('Rp', '').trim()}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="border border-orange-300 p-4 text-center text-slate-600 italic">
+                          Tidak ada denda keterlambatan pada periode ini.
                         </td>
                       </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={5} className="border border-orange-300 p-4 text-center text-gray-600 italic">
-                        Tidak ada denda keterlambatan pada periode ini.
-                      </td>
-                    </tr>
+                    )}
+                  </tbody>
+                  {dendaSchedules.length > 0 && (
+                    <tfoot>
+                      <tr className="bg-orange-100 font-bold">
+                        <td colSpan={4} className="border border-orange-300 p-3 text-orange-950 uppercase text-right">
+                          Total Seluruh Denda:
+                        </td>
+                        <td className="border border-orange-300 p-3 text-red-700 text-right text-lg">
+                          {formatRupiah(totalKeseluruhanDenda).replace('Rp', '').trim()}
+                        </td>
+                      </tr>
+                    </tfoot>
                   )}
-                </tbody>
-                {dendaSchedules.length > 0 && (
-                  <tfoot>
-                    <tr className="bg-orange-100 font-bold">
-                      <td colSpan={4} className="border border-orange-300 p-3 text-orange-950 uppercase text-right">
-                        Total Seluruh Denda:
-                      </td>
-                      <td className="border border-orange-300 p-3 text-red-700 text-right text-lg">
-                        {formatRupiah(totalKeseluruhanDenda).replace('Rp', '').trim()}
-                      </td>
-                    </tr>
-                  </tfoot>
-                )}
-              </table>
+                </table>
+              </div>
             </div>
 
+            {/* Disclaimer */}
+            <div className="mt-8 text-center text-sm text-slate-500">
+              <p className="inline-flex items-center gap-1">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+                Hasil simulasi bersifat estimasi dan dapat berubah berdasarkan kebijakan bank. Hubungi konsultan IMS Finance untuk penawaran resmi.
+              </p>
+            </div>
           </div>
         );
       })()}
